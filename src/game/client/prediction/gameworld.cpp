@@ -125,6 +125,37 @@ void CGameWorld::InsertEntity(CEntity *pEnt, bool Last)
 	}
 }
 
+void CGameWorld::CalculateLaserPath(vec2 Start, vec2 Dir, int MaxBounces, float MaxDistance, std::vector<vec2> *pPath)
+{
+    pPath->clear();
+    pPath->push_back(Start);
+
+    float Traveled = 0.0f;
+    for(int Bounce = 0; Bounce <= MaxBounces && Traveled < MaxDistance; Bounce++)
+    {
+        IntersectLineResult Result;
+        IntersectLine(Start, Start + Dir * (MaxDistance - Traveled), &Result);
+
+        if(Result.m_Hit)
+        {
+            // Повторно используем существующую логику отражения
+            vec2 TempDir = Reflect(Dir, Result.m_Normal);
+            Dir = normalize(TempDir);
+            
+            float SegmentLength = distance(Start, Result.m_Pos);
+            Traveled += SegmentLength;
+            
+            Start = Result.m_Pos;
+            pPath->push_back(Start);
+        }
+        else
+        {
+            pPath->push_back(Start + Dir * (MaxDistance - Traveled));
+            break;
+        }
+    }
+}
+
 void CGameWorld::RemoveEntity(CEntity *pEnt)
 {
 	// not in the list
