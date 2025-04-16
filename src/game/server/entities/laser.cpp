@@ -266,23 +266,63 @@ void CLaser::Reset()
 
 void CLaser::Tick()
 {
-	if((g_Config.m_SvDestroyLasersOnDeath || m_BelongsToPracticeTeam) && m_Owner >= 0)
-	{
-		CCharacter *pOwnerChar = GameServer()->GetPlayerChar(m_Owner);
-		if(!(pOwnerChar && pOwnerChar->IsAlive()))
-		{
-			Reset();
-		}
-	}
+    // Оригинальная проверка на смерть владельца
+    if((g_Config.m_SvDestroyLasersOnDeath || m_BelongsToPracticeTeam) && m_Owner >= 0)
+    {
+        CCharacter *pOwnerChar = GameServer()->GetPlayerChar(m_Owner);
+        if(!(pOwnerChar && pOwnerChar->IsAlive()))
+        {
+            Reset();
+            return; // Прекращаем обработку если лазер сброшен
+        }
+    }
 
-	float Delay;
-	if(m_TuneZone)
-		Delay = TuningList()[m_TuneZone].m_LaserBounceDelay;
-	else
-		Delay = Tuning()->m_LaserBounceDelay;
+    // Получаем серверные настройки
+    int MaxBounces = GameWorld()->GetServerSettings()->m_LaserMaxBounces;
+    float MaxDistance = GameWorld()->GetServerSettings()->m_LaserMaxDistance;
+    
+    // Оригинальная логика задержки отскоков
+    float Delay = m_TuneZone ? 
+        TuningList()[m_TuneZone].m_LaserBounceDelay : 
+        Tuning()->m_LaserBounceDelay;
 
-	if((Server()->Tick() - m_EvalTick) > (Server()->TickSpeed() * Delay / 1000.0f))
-		DoBounce();
+    if((Server()->Tick() - m_EvalTick) > (Server()->TickSpeed() * Delay / 1000.0f))
+    {
+        // Новая логика расчета траектории с ограничениями
+        vec2 From = m_Pos;
+        vec2 Dir = m_Dir;
+        int Bounces = 0;
+        float Traveled = 0.0f;
+
+        while(Bounces <= MaxBounces && Traveled < MaxDistance)
+        {
+            CWorldCore::IntersectLineResult Result;
+            GameWorld()->IntersectLine(From, From + Dir * (MaxDistance - Traveled), &Result);
+
+            if(Result.m_Hit)
+            {
+                // Оригинальный код из DoBounce() для расчета отражения
+                vec2 TempDir = normalize(Result.m_Normal);
+                float Dot = dot(TempDir, Dir);
+                Dir = Dir - 2.0f * Dot * TempDir;
+                
+                From = Result.m_Pos;
+                Traveled += distance(From, Result.m_Pos);
+                Bounces++;
+                
+                // Сохраняем данные для визуализации
+                m_From = From;
+                m_Dir = Dir;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        m_EndPos = From + Dir * (MaxDistance - Traveled);
+        m_EvalTick = Server()->Tick();
+    }
 }
 
 void CLaser::TickPaused()
