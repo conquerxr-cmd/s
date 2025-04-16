@@ -567,6 +567,20 @@ void CRenderTools::RenderTee7(const CAnimState *pAnim, const CTeeRenderInfo *pIn
 	}
 }
 
+// Пример отрисовки (в render.cpp)
+void CRenderTools::DrawLaserPreview(const std::vector<vec2> &Path)
+{
+    for(size_t i = 0; i < Path.size() - 1; i++)
+    {
+        // Пунктирная линия
+        DrawDashedLine(Path[i], Path[i+1], vec4(1,0.5,0,0.5), 8.0f);
+        
+        // Маркеры отскоков
+        if(i > 0)
+            DrawCircle(Path[i], 5.0f, vec4(1,0,0,0.8));
+    }
+}
+
 void CRenderTools::RenderTee6(const CAnimState *pAnim, const CTeeRenderInfo *pInfo, int Emote, vec2 Dir, vec2 Pos, float Alpha) const
 {
 	vec2 Direction = Dir;
