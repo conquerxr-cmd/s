@@ -150,4 +150,15 @@ public:
 	std::shared_ptr<CScoreLoadBestTimeResult> m_pLoadBestTimeResult;
 };
 
+class CGameController : public IGameController
+{
+    // Добавляем переменные настроек
+    int m_LaserMaxBounces = 2;
+    float m_LaserMaxDistance = 800.0f;
+
+    // Геттеры для доступа
+    int GetLaserMaxBounces() const { return m_LaserMaxBounces; }
+    float GetLaserMaxDistance() const { return m_LaserMaxDistance; }
+};
+
 #endif
