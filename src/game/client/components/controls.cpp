@@ -317,48 +317,71 @@ int CControls::SnapInput(int *pData)
 
 void CControls::OnRender()
 {
-	if(Client()->State() != IClient::STATE_ONLINE && Client()->State() != IClient::STATE_DEMOPLAYBACK)
-		return;
+    // Оригинальная проверка состояния клиента
+    if(Client()->State() != IClient::STATE_ONLINE && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+        return;
 
-	if(g_Config.m_ClAutoswitchWeaponsOutOfAmmo && !GameClient()->m_GameInfo.m_UnlimitedAmmo && m_pClient->m_Snap.m_pLocalCharacter)
-	{
-		// Keep track of ammo count, we know weapon ammo only when we switch to that weapon, this is tracked on server and protocol does not track that
-		m_aAmmoCount[maximum(0, m_pClient->m_Snap.m_pLocalCharacter->m_Weapon % NUM_WEAPONS)] = m_pClient->m_Snap.m_pLocalCharacter->m_AmmoCount;
-		// Autoswitch weapon if we're out of ammo
-		if(m_aInputData[g_Config.m_ClDummy].m_Fire % 2 != 0 &&
-			m_pClient->m_Snap.m_pLocalCharacter->m_AmmoCount == 0 &&
-			m_pClient->m_Snap.m_pLocalCharacter->m_Weapon != WEAPON_HAMMER &&
-			m_pClient->m_Snap.m_pLocalCharacter->m_Weapon != WEAPON_NINJA)
-		{
-			int Weapon;
-			for(Weapon = WEAPON_LASER; Weapon > WEAPON_GUN; Weapon--)
-			{
-				if(Weapon == m_pClient->m_Snap.m_pLocalCharacter->m_Weapon)
-					continue;
-				if(m_aAmmoCount[Weapon] > 0)
-					break;
-			}
-			if(Weapon != m_pClient->m_Snap.m_pLocalCharacter->m_Weapon)
-				m_aInputData[g_Config.m_ClDummy].m_WantedWeapon = Weapon + 1;
-		}
-	}
+    // Оригинальная логика автопереключения оружия
+    if(g_Config.m_ClAutoswitchWeaponsOutOfAmmo && !GameClient()->m_GameInfo.m_UnlimitedAmmo && m_pClient->m_Snap.m_pLocalCharacter)
+    {
+        m_aAmmoCount[maximum(0, m_pClient->m_Snap.m_pLocalCharacter->m_Weapon % NUM_WEAPONS)] = m_pClient->m_Snap.m_pLocalCharacter->m_AmmoCount;
+        
+        if(m_aInputData[g_Config.m_ClDummy].m_Fire % 2 != 0 &&
+            m_pClient->m_Snap.m_pLocalCharacter->m_AmmoCount == 0 &&
+            m_pClient->m_Snap.m_pLocalCharacter->m_Weapon != WEAPON_HAMMER &&
+            m_pClient->m_Snap.m_pLocalCharacter->m_Weapon != WEAPON_NINJA)
+        {
+            int Weapon;
+            for(Weapon = WEAPON_LASER; Weapon > WEAPON_GUN; Weapon--)
+            {
+                if(Weapon == m_pClient->m_Snap.m_pLocalCharacter->m_Weapon)
+                    continue;
+                if(m_aAmmoCount[Weapon] > 0)
+                    break;
+            }
+            if(Weapon != m_pClient->m_Snap.m_pLocalCharacter->m_Weapon)
+                m_aInputData[g_Config.m_ClDummy].m_WantedWeapon = Weapon + 1;
+        }
+    }
 
-	// update target pos
-	if(m_pClient->m_Snap.m_pGameInfoObj && !m_pClient->m_Snap.m_SpecInfo.m_Active)
-	{
-		// make sure to compensate for smooth dyncam to ensure the cursor stays still in world space if zoomed
-		vec2 DyncamOffsetDelta = m_pClient->m_Camera.m_DyncamTargetCameraOffset - m_pClient->m_Camera.m_aDyncamCurrentCameraOffset[g_Config.m_ClDummy];
-		float Zoom = m_pClient->m_Camera.m_Zoom;
-		m_aTargetPos[g_Config.m_ClDummy] = m_pClient->m_LocalCharacterPos + m_aMousePos[g_Config.m_ClDummy] - DyncamOffsetDelta + DyncamOffsetDelta / Zoom;
-	}
-	else if(m_pClient->m_Snap.m_SpecInfo.m_Active && m_pClient->m_Snap.m_SpecInfo.m_UsePosition)
-	{
-		m_aTargetPos[g_Config.m_ClDummy] = m_pClient->m_Snap.m_SpecInfo.m_Position + m_aMousePos[g_Config.m_ClDummy];
-	}
-	else
-	{
-		m_aTargetPos[g_Config.m_ClDummy] = m_aMousePos[g_Config.m_ClDummy];
-	}
+    // Оригинальное обновление позиции цели
+    if(m_pClient->m_Snap.m_pGameInfoObj && !m_pClient->m_Snap.m_SpecInfo.m_Active)
+    {
+        vec2 DyncamOffsetDelta = m_pClient->m_Camera.m_DyncamTargetCameraOffset - m_pClient->m_Camera.m_aDyncamCurrentCameraOffset[g_Config.m_ClDummy];
+        float Zoom = m_pClient->m_Camera.m_Zoom;
+        m_aTargetPos[g_Config.m_ClDummy] = m_pClient->m_LocalCharacterPos + m_aMousePos[g_Config.m_ClDummy] - DyncamOffsetDelta + DyncamOffsetDelta / Zoom;
+    }
+    else if(m_pClient->m_Snap.m_SpecInfo.m_Active && m_pClient->m_Snap.m_SpecInfo.m_UsePosition)
+    {
+        m_aTargetPos[g_Config.m_ClDummy] = m_pClient->m_Snap.m_SpecInfo.m_Position + m_aMousePos[g_Config.m_ClDummy];
+    }
+    else
+    {
+        m_aTargetPos[g_Config.m_ClDummy] = m_aMousePos[g_Config.m_ClDummy];
+    }
+
+    // Новая логика превью лазера
+    if(m_pClient->m_Snap.m_pLocalCharacter && 
+       m_pClient->m_Snap.m_pLocalCharacter->m_Weapon == WEAPON_LASER &&
+       g_Config.m_ClLaserPreview)
+    {
+        // Получаем серверные настройки
+        int MaxBounces = GameClient()->GetServerSettings()->m_LaserMaxBounces;
+        float MaxDistance = GameClient()->GetServerSettings()->m_LaserMaxDistance;
+
+        // Рассчитываем путь
+        std::vector<vec2> Path;
+        CalculateLaserPath(
+            m_pClient->m_LocalCharacterPos,  // Используем позицию персонажа
+            m_aTargetPos[g_Config.m_ClDummy],  // Целевая позиция
+            MaxBounces,
+            MaxDistance,
+            &Path
+        );
+        
+        // Отрисовываем превью
+        RenderTools()->DrawLaserPreview(Path);
+    }
 }
 
 bool CControls::OnCursorMove(float x, float y, IInput::ECursorType CursorType)
